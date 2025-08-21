@@ -1,0 +1,227 @@
+File: gui_design_style_1_7_v4_00.txt
+Version: 1.0
+Author: AI Assistant
+Description: A specification for a minimal, functional, full-screen, dark-themed GUI style. This style is suitable for web-based developer tools, interpreters, and simple editors.
+
+==================================================
+1. Design Concept
+==================================================
+
+The core concept is a "minimalist code editor" look and feel. The design prioritizes functionality and clarity over decoration.
+
+-   **Theme**: Dark theme with a monochrome color palette for a focused, low-strain user experience.
+-   **Layout**: Dynamic full-screen layout that utilizes the entire browser viewport. The main content areas resize proportionally based on available space.
+-   **Typography**: Consistent use of a monospace font to create a technical, uniform appearance, similar to a code editor.
+-   **Components**: Simple, clean, and functional components with subtle interactive feedback (e.g., hover effects).
+
+==================================================
+2. Color Palette (CSS Custom Properties)
+==================================================
+
+This palette should be defined in the `:root` selector for easy reuse and modification.
+
+:root {
+  --bg-color: #282c34;               /* Main background color */
+  --text-color: #abb2bf;             /* Primary text color (slightly muted) */
+  --border-color: #4b5263;           /* Borders and separators */
+  --highlight-bg-color: #3a3f4b;     /* Background for input/output areas */
+  --highlight-text-color: #e6e6e6;   /* Active/highlighted text, titles */
+  --button-bg-color: #4b5263;        /* Default button background */
+  --button-hover-bg-color: #5c6370;  /* Button background on hover */
+}
+
+==================================================
+3. Typography
+==================================================
+
+-   **Font Family**: A stack of common monospace fonts.
+    --font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+
+-   **Base Font Size**: A standard, readable size for all text.
+    --font-size: 14px;
+
+-   **Global Application**: The body element should use the base font size and family.
+    body {
+      font-family: var(--font-family);
+      font-size: var(--font-size);
+    }
+
+-   **Headings (h1, h3, etc.)**: Should use the base font size but with a bold weight to establish hierarchy without altering the text flow.
+    h1, h3 {
+      font-size: var(--font-size);
+      font-weight: bold;
+      color: var(--highlight-text-color);
+    }
+
+==================================================
+4. Layout Structure
+==================================================
+
+The layout is built using Flexbox for dynamic and proportional resizing.
+
+-   **Full-Screen Container**: The `html` and `body` tags must have `height: 100%` and `margin: 0`. The main `.container` div should also have `height: 100%` and use `display: flex`.
+
+-   **Primary Layout Direction**: The main `.container` is a vertical flex container (`flex-direction: column`).
+
+-   **Header Section (`<header>`)**:
+    -   Contains the title, button bar, and any other top-level controls.
+    -   Should not shrink (`flex-shrink: 0`).
+    -   Has a fixed margin/padding to separate it from the main content.
+
+-   **Main Content Section (`.main-content`)**:
+    -   This container holds the primary interactive areas (e.g., input, output panels).
+    -   It must grow to fill all available vertical space (`flex-grow: 1`).
+    -   It is also a vertical flex container (`flex-direction: column`) to manage its children.
+    -   `min-height: 0` is crucial for allowing children with `overflow` to scroll correctly within a flex container.
+
+-   **Proportional Content Areas**:
+    -   Children of `.main-content` (e.g., input, output, and environment panels) should have their heights defined by the `flex` property. For example, a 2:2:1 ratio would be:
+        .input-panel { flex: 2; }
+        .output-panel { flex: 2; }
+        .status-panel { flex: 1; }
+
+==================================================
+5. Component Styles
+==================================================
+
+-   **Buttons (`<button>`)**:
+    -   Clean, rectangular shape with slightly rounded corners (`border-radius: 4px`).
+    -   Subtle `transition` on `background-color` for smooth hover effects.
+    -   A disabled state with reduced opacity (`opacity: 0.5`).
+
+-   **Display & Input Areas (`.display-area`, `textarea`)**:
+    -   Shared style for a consistent look.
+    -   Use `--highlight-bg-color` for the background and `--border-color` for the border.
+    -   `box-sizing: border-box` is essential to ensure padding and borders are included in the element's total width and height.
+    -   Vertical scrolling should be enabled when content overflows (`overflow-y: auto`).
+    -   Manual resizing should be disabled (`resize: none`) as the layout is controlled by Flexbox.
+
+-   **Highlights (`.current-step` or similar)**:
+    -   A subtle background color change (`--button-bg-color`) to indicate an active or current item without being distracting.
+
+==================================================
+6. Complete CSS Code for Reference
+==================================================
+
+/* This is the full CSS code implementing the design style. */
+:root {
+  --bg-color: #282c34;
+  --text-color: #abb2bf;
+  --border-color: #4b5263;
+  --highlight-bg-color: #3a3f4b;
+  --highlight-text-color: #e6e6e6;
+  --button-bg-color: #4b5263;
+  --button-hover-bg-color: #5c6370;
+  --font-size: 14px;
+  --font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+}
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+}
+.container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 1.5em;
+  box-sizing: border-box;
+}
+header {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+  margin-bottom: 1em;
+}
+h1, h3 {
+  font-size: var(--font-size);
+  font-weight: bold;
+  color: var(--highlight-text-color);
+  margin: 0;
+}
+.button-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+button {
+  background-color: var(--button-bg-color);
+  color: var(--highlight-text-color);
+  border: 1px solid var(--border-color);
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  transition: background-color 0.2s;
+}
+button:hover {
+  background-color: var(--button-hover-bg-color);
+}
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.main-content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+  min-height: 0;
+}
+textarea, .display-area {
+  width: 100%;
+  box-sizing: border-box;
+  background-color: var(--highlight-bg-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 10px;
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+textarea {
+  resize: none;
+}
+.highlight-item-class { /* Generic name for highlight */
+  background-color: var(--button-bg-color);
+  padding: 2px;
+  border-radius: 2px;
+  color: var(--highlight-text-color);
+}
+
+
+==================================================
+7. Example HTML Structure for Application
+==================================================
+
+<!-- Use this HTML skeleton as a starting point. -->
+<body>
+  <div class="container">
+    <header>
+      <h1>Application Title</h1>
+      <div class="button-bar">
+        <button>Action 1</button>
+        <button>Action 2</button>
+      </div>
+      <div id="status-line">Status: Ready</div>
+    </header>
+
+    <div class="main-content">
+      <!-- Example ratio 2:2:1 -->
+      <textarea id="input-panel" style="flex: 2; min-height: 60px;"></textarea>
+      <div id="output-panel" class="display-area" style="flex: 2; min-height: 60px;"></div>
+      <div id="info-panel" class="display-area" style="flex: 1; min-height: 40px;"></div>
+    </div>
+  </div>
+</body>

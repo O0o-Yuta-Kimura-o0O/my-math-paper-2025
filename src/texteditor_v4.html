@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TextEditor v4</title>
+    <style>
+        /* ================================================== */
+        /* 1. Design Style Definition (Based on the provided spec) */
+        /* ================================================== */
+        :root {
+            --bg-color: #282c34;               /* Main background color */
+            --header-bg-color: #3a3f4b;        /* Header background (slightly lighter than main) */
+            --text-color: #abb2bf;             /* Primary text color */
+            --highlight-text-color: #e6e6e6;   /* Active/highlighted text */
+            --border-color: #4b5263;           /* Borders and separators */
+            --menu-hover-bg-color: #5c6370;   /* Menu item background on hover */
+            --font-size: 16px;                 /* Slightly larger for better readability */
+            --font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+        }
+
+        /* ================================================== */
+        /* 2. Global Layout */
+        /* ================================================== */
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden; /* Prevents scrollbars on the body */
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-family);
+            font-size: var(--font-size);
+            display: flex;
+            flex-direction: column; /* Vertical layout */
+        }
+
+        /* ================================================== */
+        /* 3. Component Styles */
+        /* ================================================== */
+
+        /* Header Area */
+        header {
+            flex-shrink: 0; /* Prevents the header from shrinking */
+            background-color: var(--header-bg-color);
+            padding: 10px 20px;
+            position: relative; /* Needed for positioning the dropdown menu */
+            z-index: 10;
+        }
+
+        /* The main "File" button for the menu */
+        #file-menu-btn {
+            background-color: transparent;
+            color: var(--highlight-text-color);
+            border: none;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-family: var(--font-family);
+            font-size: var(--font-size);
+        }
+
+        #file-menu-btn:hover {
+            background-color: var(--menu-hover-bg-color);
+            border-radius: 4px;
+        }
+
+        /* The dropdown menu itself */
+        .menu-dropdown {
+            display: none; /* Hidden by default */
+            position: absolute;
+            top: 100%; /* Position below the header */
+            left: 15px;
+            background-color: var(--header-bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            list-style: none;
+            margin: 5px 0 0 0;
+            padding: 5px 0;
+            min-width: 150px;
+        }
+
+        /* Dropdown menu items */
+        .menu-dropdown li {
+            color: var(--highlight-text-color);
+            padding: 8px 15px;
+            cursor: pointer;
+        }
+
+        .menu-dropdown li:hover {
+            background-color: var(--menu-hover-bg-color);
+        }
+
+        /* Text Editor Area */
+        #editor {
+            flex-grow: 1; /* Takes up all available space */
+            width: 100%;
+            background-color: var(--bg-color); /* Same as body background */
+            color: var(--text-color);
+            border: none;      /* No border for a seamless look */
+            outline: none;     /* No outline on focus */
+            resize: none;      /* Disable manual resizing */
+            padding: 20px;
+            box-sizing: border-box; /* Ensures padding is included in the element's total height */
+            font-family: var(--font-family);
+            font-size: var(--font-size);
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <button id="file-menu-btn">File</button>
+        <ul id="file-menu" class="menu-dropdown">
+            <li id="new-btn">New</li>
+            <li id="open-btn">Open...</li>
+            <li id="save-btn">Save</li>
+            <li id="save-as-btn">Save As...</li>
+        </ul>
+    </header>
+
+    <textarea id="editor" spellcheck="false"></textarea>
+
+    <!-- Invisible elements for legacy file operations -->
+    <!-- MODIFIED: "accept" attribute removed to allow opening any file type -->
+    <input type="file" id="file-input" style="display: none;">
+    <a id="download-link" style="display: none;"></a>
+
+
+    <script>
+        // ==================================================
+        // 1. Get references to our HTML elements
+        // ==================================================
+        const editor = document.getElementById('editor');
+        const fileMenuBtn = document.getElementById('file-menu-btn');
+        const fileMenu = document.getElementById('file-menu');
+        const newBtn = document.getElementById('new-btn');
+        const openBtn = document.getElementById('open-btn');
+        const saveBtn = document.getElementById('save-btn');
+        const saveAsBtn = document.getElementById('save-as-btn');
+
+        // Elements for legacy file handling
+        const fileInput = document.getElementById('file-input');
+        const downloadLink = document.getElementById('download-link');
+
+
+        // ==================================================
+        // 2. State Management Variables
+        // ==================================================
+        let isDirty = false; // Tracks if there are unsaved changes.
+        let currentFileName = "New File"; // Store the name of the file for the title bar.
+
+        // ==================================================
+        // 3. Core Editor Logic and Functions
+        // ==================================================
+
+        // --- Menu Visibility ---
+        fileMenuBtn.addEventListener('click', () => {
+            const isVisible = fileMenu.style.display === 'block';
+            fileMenu.style.display = isVisible ? 'none' : 'block';
+        });
+        document.addEventListener('click', (event) => {
+            if (!fileMenuBtn.contains(event.target)) {
+                fileMenu.style.display = 'none';
+            }
+        });
+
+        // --- Tracking Unsaved Changes ---
+        editor.addEventListener('input', () => {
+            isDirty = true;
+            document.title = `* ${currentFileName} - TextEditor v4`;
+        });
+
+        // --- Confirmation for Unsaved Changes ---
+        function confirmUnsavedChanges() {
+            if (!isDirty) {
+                return true;
+            }
+            return confirm("You have unsaved changes. Do you want to discard them and continue?");
+        }
+
+        // --- File->New ---
+        newBtn.addEventListener('click', () => {
+            if (confirmUnsavedChanges()) {
+                editor.value = '';
+                isDirty = false;
+                currentFileName = "New File";
+                document.title = `${currentFileName} - TextEditor v4`;
+            }
+        });
+
+        // =================================================================================
+        // FILE OPERATION METHOD 1: Legacy Method (Works everywhere, including local files)
+        // This method uses hidden <input> and <a> elements to simulate file operations.
+        // It's compatible with all browsers and doesn't require a secure server.
+        // =================================================================================
+
+        // --- File->Open ---
+        openBtn.addEventListener('click', () => {
+            if (!confirmUnsavedChanges()) return;
+            // Trigger a click on the hidden file input element.
+            fileInput.click();
+        });
+
+        // This event fires when the user selects a file from the dialog.
+        fileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Use FileReader to read the file content as text.
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                editor.value = e.target.result;
+                currentFileName = file.name;
+                isDirty = false;
+                document.title = `${currentFileName} - TextEditor v4`;
+            };
+            reader.onerror = (e) => {
+                alert("Error reading file.");
+                console.error("FileReader error:", e);
+            };
+            reader.readAsText(file);
+
+            // Reset the input value to allow opening the same file again.
+            fileInput.value = '';
+        });
+
+        // --- File->Save ---
+        // With the legacy method, "Save" cannot overwrite the original file directly
+        // due to browser security restrictions. So, it behaves exactly like "Save As...".
+        saveBtn.addEventListener('click', () => {
+            saveAsBtn.click();
+        });
+
+        // --- File->Save As ---
+        saveAsBtn.addEventListener('click', () => {
+            // **NOTE**: This legacy method CANNOT open a true OS "Save As" dialog that lets
+            // you choose a folder. It triggers a file download instead. The file name is
+            // collected via a simple `prompt`. For a real "Save As" experience,
+            // you must use the "Modern API Method" below and run this on a server.
+
+            // Ask user for a file name.
+            const suggestedName = (currentFileName === "New File") ? "untitled.txt" : currentFileName;
+            const fileName = prompt("Save as:", suggestedName);
+
+            if (fileName) { // If the user didn't cancel the prompt
+                const fileBlob = new Blob([editor.value], { type: 'text/plain' });
+                downloadLink.href = URL.createObjectURL(fileBlob);
+                downloadLink.download = fileName;
+                downloadLink.click();
+                URL.revokeObjectURL(downloadLink.href);
+
+                currentFileName = fileName;
+                isDirty = false;
+                document.title = `${currentFileName} - TextEditor v4`;
+            }
+        });
+
+
+        /*
+        // =================================================================================
+        // HOW TO RESTORE THE MODERN "FILE SYSTEM ACCESS API" METHOD
+        // =================================================================================
+        // The code below uses a modern browser API that allows web pages to directly
+        // interact with files on your computer (open, save, overwrite). This method
+        // provides a much better user experience, including native OS file dialogs.
+        //
+        // **REQUIREMENT**: This API only works in a "secure context", meaning your
+        // web page must be served over HTTPS or from `localhost`. It will NOT work
+        // if you just open the HTML file directly from your computer (`file://...`).
+        //
+        // **TO RESTORE**:
+        // 1. Comment out the "Legacy Method" code block above.
+        // 2. Uncomment this entire "Modern API Method" block below.
+        // 3. Make sure you are running this file from a local web server.
+        // =================================================================================
+        */
+
+        /*
+        // --- About async/await ---
+        // `async` and `await` are special keywords in JavaScript for handling "asynchronous"
+        // operations. An asynchronous operation is one that takes time to complete, like
+        // asking the user to pick a file or saving data to disk.
+        // Instead of freezing the entire web page while waiting, `async/await` lets the
+        // browser continue working on other things.
+        // - `async` before a function means the function can use `await`.
+        // - `await` pauses the function's execution until the asynchronous task (the "Promise")
+        //   is finished, and then continues with the result. It makes asynchronous code
+        //   look and feel like regular, synchronous code.
+
+        // State variable for the modern API
+        let currentFileHandle = null;
+
+        // --- File->Open ---
+        openBtn.addEventListener('click', async () => {
+            if (!confirmUnsavedChanges()) return;
+            try {
+                // MODIFIED: By omitting the 'types' option, the file picker will
+                // default to allowing the user to select any file type.
+                const [fileHandle] = await window.showOpenFilePicker();
+                currentFileHandle = fileHandle;
+                const file = await fileHandle.getFile();
+                const contents = await file.text();
+                editor.value = contents;
+                isDirty = false;
+                currentFileName = file.name;
+                document.title = `${currentFileName} - TextEditor v4`;
+            } catch (err) {
+                console.error("Error opening file:", err);
+            }
+        });
+
+        // --- File->Save ---
+        saveBtn.addEventListener('click', async () => {
+            if (currentFileHandle) { // If we have a file handle, save to the existing file.
+                try {
+                    const writable = await currentFileHandle.createWritable();
+                    await writable.write(editor.value);
+                    await writable.close();
+                    isDirty = false;
+                    document.title = `${currentFileName} - TextEditor v4`;
+                } catch (err) {
+                    console.error("Error saving file:", err);
+                    alert("Error saving file.");
+                }
+            } else { // If it's a new file, run "Save As".
+                saveAsBtn.click();
+            }
+        });
+
+        // --- File->Save As ---
+        saveAsBtn.addEventListener('click', async () => {
+            try {
+                // This function opens the native OS "Save As" dialog.
+                // MODIFIED: The 'types' option is removed to allow saving with any extension.
+                // The user can type "image.svg" or "document.json" and it will work.
+                const fileHandle = await window.showSaveFilePicker();
+
+                currentFileHandle = fileHandle; // Store the new handle
+                const writable = await fileHandle.createWritable();
+                await writable.write(editor.value);
+                await writable.close();
+                isDirty = false;
+                currentFileName = fileHandle.name;
+                document.title = `${currentFileName} - TextEditor v4`;
+            } catch (err) {
+                console.error("Error saving file as:", err);
+            }
+        });
+        */
+    </script>
+</body>
+</html>

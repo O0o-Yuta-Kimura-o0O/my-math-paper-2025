@@ -1,0 +1,519 @@
+<!-- lambda_interpreter_01_07_v4.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Untyped Lambda Calculus Interpreter (UI/Scroll Fix)</title>
+<style>
+  :root {
+    --bg-color: #282c34;
+    --text-color: #abb2bf;
+    --border-color: #4b5263;
+    --highlight-bg-color: #3a3f4b;
+    --highlight-text-color: #e6e6e6;
+    --button-bg-color: #4b5263;
+    --button-hover-bg-color: #5c6370;
+    --stop-button-bg-color: #5c6370;
+    --font-size: 14px;
+    --font-family: 'Menlo', 'Consolas', 'Monaco', monospace;
+  }
+  html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden; /* Prevent body scrollbars */
+  }
+  body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+  }
+  .container {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 1.5em;
+    box-sizing: border-box;
+  }
+  header {
+    flex-shrink: 0; /* Prevent header from shrinking */
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    margin-bottom: 1em;
+  }
+  h1, h3 {
+    font-size: var(--font-size);
+    font-weight: bold;
+    color: var(--highlight-text-color);
+    margin: 0;
+  }
+  .button-bar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  button {
+    background-color: var(--button-bg-color);
+    color: var(--highlight-text-color);
+    border: 1px solid var(--border-color);
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+    transition: background-color 0.2s;
+  }
+  button:hover {
+    background-color: var(--button-hover-bg-color);
+  }
+  button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+  }
+  #stopBtn {
+    display: none;
+    background-color: var(--stop-button-bg-color);
+  }
+  #stepCounter {
+    font-weight: bold;
+    color: var(--highlight-text-color);
+  }
+  .main-content {
+    flex-grow: 1; /* Take up all remaining vertical space */
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    min-height: 0; /* Important for flexbox children with overflow */
+  }
+  textarea, .display-area {
+    width: 100%;
+    box-sizing: border-box;
+    background-color: var(--highlight-bg-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 10px;
+    font-family: var(--font-family);
+    font-size: var(--font-size);
+  }
+  #inputArea {
+    flex: 2;
+    min-height: 60px;
+    resize: none; /* Vertical resize is now controlled by flexbox */
+  }
+  #steps {
+    flex: 2;
+    min-height: 60px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .env-container {
+    flex: 1;
+    min-height: 40px;
+    display: flex;
+    flex-direction: column;
+  }
+  #envList {
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    flex-grow: 1; /* Take space inside env-container */
+    margin-top: 10px;
+  }
+  .current-step {
+    background-color: var(--button-bg-color);
+    padding: 2px;
+    border-radius: 2px;
+    color: var(--highlight-text-color);
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Untyped Lambda Calculus Interpreter</h1>
+    <div class="button-bar">
+      <button id="evaluateBtn">Evaluate (or Define)</button>
+      <button id="resetEnvBtn">Reset Definitions</button>
+      <button id="stopBtn">Stop Evaluation</button>
+    </div>
+    <div id="stepCounter">Steps executed: 0</div>
+  </header>
+  
+  <div class="main-content">
+    <textarea id="inputArea" placeholder="Enter lambda expressions or definitions like 'f_name = λx.x'. Separate multiple entries with ';'. Use // for comments."></textarea>
+    <div id="steps" class="display-area"></div>
+    <div class="env-container display-area">
+      <h3>Current Environment (Name Definitions)</h3>
+      <div id="envList">(No definitions yet)</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+  lambda_interpreter_01_07_v4.js (embedded)
+  ---- 型無しλ計算インタプリタ ----
+  変更点 (v4):
+    - 評価が正常終了した際に、出力画面の末尾まで自動スクロールするように修正。
+      - 評価プロセスの最後にスクロール処理を追加。
+      - 複数定義の結果表示後にもスクロール処理を追加。
+*/
+
+// ---- データ構造: λ式を表すクラス (Var, Lambda, App) ----
+class Var {
+  constructor(name) { this.tag = "Var"; this.name = name; }
+}
+class Lambda {
+  constructor(param, body) { this.tag = "Lambda"; this.param = param; this.body = body; }
+}
+class App {
+  constructor(fn, arg) { this.tag = "App"; this.fn = fn; this.arg = arg; }
+}
+
+// ================================================================
+// LambdaCalculusCore: 計算ロジック (UI非依存)
+// ================================================================
+const LambdaCalculusCore = {
+  environment: {},
+  resetEnvironment: function() { this.environment = {}; },
+  define: function(name, definitionStr) {
+    if (name === definitionStr) throw new Error("Definition error: Direct self-reference is not allowed: " + name + " = " + definitionStr);
+    const tokens = this.tokenize(definitionStr);
+    const exprAST = this.parseExpr(tokens);
+    if (tokens.length > 0) throw new Error("Parse error: Unexpected tokens after definition: " + tokens.join(" "));
+    this.environment[name] = exprAST;
+    return "Defined: " + name + " = " + this.exprToString(exprAST);
+  },
+  tokenize: function(str) {
+    return str.replace(/\(/g, " ( ").replace(/\)/g, " ) ").replace(/\./g, " . ").replace(/λ/g, " λ ").replace(/\\/g, " λ ").split(/\s+/).filter(t => t.length > 0);
+  },
+  parse: function(str) {
+    const tokens = this.tokenize(str);
+    const ast = this.parseExpr(tokens);
+    if (tokens.length > 0) throw new Error("Parse error: Unexpected tokens after expression: " + tokens.join(" "));
+    return ast;
+  },
+  parseExpr: function(tokens) {
+    if (tokens.length === 0) throw new Error("Parse error: No tokens left.");
+    if (tokens[0] === "λ") {
+      tokens.shift();
+      if (tokens.length === 0) throw new Error("Parse error: Expected variable after λ.");
+      let param = tokens.shift();
+      if (!param.match(/^[a-zA-Z0-9_]+$/)) throw new Error("Parse error: Invalid variable name for lambda parameter: " + param);
+      if (tokens.length === 0 || tokens[0] !== ".") throw new Error("Parse error: Expected '.' after 'λ" + param + "'.");
+      tokens.shift();
+      let body = this.parseExpr(tokens);
+      return new Lambda(param, body);
+    } else {
+      return this.parseApp(tokens);
+    }
+  },
+  parseApp: function(tokens) {
+    let left = this.parseFactor(tokens);
+    while (tokens.length > 0 && tokens[0] !== ")" && tokens[0] !== "." && tokens[0] !== "=") {
+      if (tokens[0] === "λ") break;
+      let right = this.parseFactor(tokens);
+      left = new App(left, right);
+    }
+    return left;
+  },
+  parseFactor: function(tokens) {
+    if (tokens.length === 0) throw new Error("Parse error: Expected an element but found no tokens.");
+    let t = tokens.shift();
+    if (t === "(") {
+      let e = this.parseExpr(tokens);
+      if (tokens.length === 0 || tokens[0] !== ")") throw new Error("Parse error: Unmatched parenthesis, expected ')'.");
+      tokens.shift();
+      return e;
+    } else if (t.match(/^[a-zA-Z0-9_]+$/)) {
+      return new Var(t);
+    } else {
+      throw new Error("Parse error: Unknown token or invalid variable name: " + t);
+    }
+  },
+  exprToString: function(e) {
+    if (!e) return "(null)";
+    switch (e.tag) {
+      case "Var": return e.name;
+      case "Lambda": return "(λ" + e.param + "." + this.exprToString(e.body) + ")";
+      case "App": return "(" + this.exprToString(e.fn) + " " + this.exprToString(e.arg) + ")";
+    }
+  },
+  deepCopy: function(expr) {
+    if (!expr) return null;
+    switch (expr.tag) {
+      case "Var": return new Var(expr.name);
+      case "Lambda": return new Lambda(expr.param, this.deepCopy(expr.body));
+      case "App": return new App(this.deepCopy(expr.fn), this.deepCopy(expr.arg));
+      default: throw new Error("deepCopy: Unknown expression tag: " + (expr ? expr.tag : 'undefined'));
+    }
+  },
+  freeVariables: function(expr) {
+    const fvSet = new Set();
+    function find(e, boundVars) {
+      if (!e) return;
+      switch (e.tag) {
+        case "Var": if (!boundVars.has(e.name)) { fvSet.add(e.name); } break;
+        case "Lambda": const newBoundVars = new Set(boundVars); newBoundVars.add(e.param); find(e.body, newBoundVars); break;
+        case "App": find(e.fn, boundVars); find(e.arg, boundVars); break;
+      }
+    }
+    find(expr, new Set());
+    return fvSet;
+  },
+  generateFreshVar: function(baseName, forbiddenNames) {
+    if (!baseName) throw new Error("generateFreshVar: baseName must be provided.");
+    if (!forbiddenNames.has(baseName)) return baseName;
+    let count = 1;
+    let newName = baseName + "_" + count;
+    while (forbiddenNames.has(newName)) {
+      count++;
+      newName = baseName + "_" + count;
+      if (count > 1000) throw new Error("generateFreshVar: Could not generate a fresh variable name for " + baseName);
+    }
+    return newName;
+  },
+  substitute: function(expr, varNameToReplace, valueToSubstitute) {
+    if (!expr) throw new Error("substitute: Expression is null or undefined.");
+    switch (expr.tag) {
+      case "Var": return expr.name === varNameToReplace ? this.deepCopy(valueToSubstitute) : expr;
+      case "App": return new App(this.substitute(expr.fn, varNameToReplace, valueToSubstitute), this.substitute(expr.arg, varNameToReplace, valueToSubstitute));
+      case "Lambda":
+        const param = expr.param;
+        const body = expr.body;
+        if (param === varNameToReplace) return expr;
+        const fvInValue = this.freeVariables(valueToSubstitute);
+        if (!fvInValue.has(param)) {
+          return new Lambda(param, this.substitute(body, varNameToReplace, valueToSubstitute));
+        } else {
+          const forbidden = this.freeVariables(body);
+          fvInValue.forEach(v => forbidden.add(v));
+          const newParam = this.generateFreshVar(param, forbidden);
+          const newBody = this.substitute(body, param, new Var(newParam));
+          return new Lambda(newParam, this.substitute(newBody, varNameToReplace, valueToSubstitute));
+        }
+      default: throw new Error("substitute: Unknown expression tag: " + expr.tag);
+    }
+  },
+  expandByEnv: function(expr, visited = new Set()) {
+    if (!expr) throw new Error("expandByEnv: Expression is null or undefined.");
+    switch (expr.tag) {
+      case "Var":
+        if (this.environment[expr.name]) {
+          if (visited.has(expr.name)) throw new Error("Cyclic reference detected for: " + expr.name);
+          const newVisited = new Set(visited);
+          newVisited.add(expr.name);
+          return this.expandByEnv(this.deepCopy(this.environment[expr.name]), newVisited);
+        } else { return expr; }
+      case "Lambda": return new Lambda(expr.param, this.expandByEnv(expr.body, visited));
+      case "App": return new App(this.expandByEnv(expr.fn, visited), this.expandByEnv(expr.arg, visited));
+      default: throw new Error("expandByEnv: Unknown expression tag: " + expr.tag);
+    }
+  },
+  betaReduceOneStep: function(expr) {
+    if (!expr) return null;
+    if (expr.tag === "App") {
+      if (expr.fn.tag === "Lambda") return this.substitute(expr.fn.body, expr.fn.param, expr.arg);
+      let reducedFn = this.betaReduceOneStep(expr.fn);
+      if (reducedFn) return new App(reducedFn, expr.arg);
+      let reducedArg = this.betaReduceOneStep(expr.arg);
+      if (reducedArg) return new App(expr.fn, reducedArg);
+      return null;
+    } else if (expr.tag === "Lambda") {
+      let reducedBody = this.betaReduceOneStep(expr.body);
+      if (reducedBody) return new Lambda(expr.param, reducedBody);
+      return null;
+    }
+    return null;
+  },
+  evaluateRealtime: async function(expr, { maxSteps = 100000, onStep, stopSignal }) {
+    if (!expr) throw new Error("evaluateRealtime: Initial expression is null.");
+    let current = expr;
+    let stepList = [this.exprToString(current)];
+    if (onStep) await onStep(stepList[0], 0);
+    for (let i = 0; i < maxSteps && !stopSignal.stopped; i++) {
+      let next = this.betaReduceOneStep(current);
+      if (!next) break;
+      current = next;
+      let stepStr = this.exprToString(current);
+      stepList.push(stepStr);
+      if (onStep) await onStep(stepStr, i + 1);
+      if (i % 10 === 0) await new Promise(resolve => setTimeout(resolve, 0));
+      if (i === maxSteps - 1 && this.betaReduceOneStep(current)) {
+        throw new Error("Reduction step limit (" + maxSteps + ") reached. Possible infinite loop.");
+      }
+    }
+    if (stopSignal.stopped) throw new Error("Evaluation stopped by user.");
+    return stepList;
+  }
+};
+
+// ================================================================
+// UI Controller & Event Handlers
+// ================================================================
+let evaluationStopped = false;
+
+function removeComments(str) {
+  return str.split('\n').map(line => {
+    const commentIndex = line.indexOf('//');
+    return commentIndex !== -1 ? line.substring(0, commentIndex) : line;
+  }).join('\n');
+}
+
+function displayStep(stepText, stepNumber) {
+  const stepsDiv = document.getElementById("steps");
+  const stepCounterDiv = document.getElementById("stepCounter");
+  const prevHighlight = stepsDiv.querySelector('.current-step');
+  if (prevHighlight) prevHighlight.classList.remove('current-step');
+  const stepElement = document.createElement("div");
+  if (stepNumber === 0) {
+    stepElement.textContent = "Initial: " + stepText;
+  } else {
+    stepElement.textContent = "Step " + stepNumber + ": " + stepText;
+  }
+  stepsDiv.appendChild(stepElement);
+  stepElement.classList.add('current-step');
+  stepCounterDiv.textContent = "Steps executed: " + (stepNumber + 1);
+  stepsDiv.scrollTop = stepsDiv.scrollHeight;
+}
+
+function clearPreviousHighlight() {
+    const prevHighlight = document.getElementById("steps").querySelector('.current-step');
+    if (prevHighlight) prevHighlight.classList.remove('current-step');
+}
+
+async function processExpression(inputText) {
+  try {
+    if (!inputText.trim()) return "";
+    let eqIndex = inputText.indexOf("=");
+    if (eqIndex > 0 && inputText.substring(0, eqIndex).trim().match(/^[a-zA-Z0-9_]+$/) && (inputText.indexOf("=", eqIndex + 1) === -1 || !inputText.substring(eqIndex + 1).trim().includes("="))) {
+      let name = inputText.substring(0, eqIndex).trim();
+      let definitionStr = inputText.substring(eqIndex + 1).trim();
+      return LambdaCalculusCore.define(name, definitionStr);
+    } else {
+      const stepsDiv = document.getElementById("steps");
+      stepsDiv.innerHTML = `<strong>【Input Expression】</strong>\n${inputText}\n\n`;
+      let initialAST = LambdaCalculusCore.parse(inputText);
+      let expandedAST = LambdaCalculusCore.expandByEnv(initialAST);
+      const initialStr = LambdaCalculusCore.exprToString(initialAST);
+      const expandedStr = LambdaCalculusCore.exprToString(expandedAST);
+      if (expandedStr !== initialStr) {
+        stepsDiv.innerHTML += `<strong>【After Environment Expansion】</strong>\n${expandedStr}\n\n`;
+      }
+      stepsDiv.innerHTML += "<strong>【Evaluation Steps】</strong>\n";
+      const onStepCallback = async (step, stepNum) => displayStep(step, stepNum);
+      const stopSignal = { get stopped() { return evaluationStopped; } };
+      let stepList = await LambdaCalculusCore.evaluateRealtime(expandedAST, { onStep: onStepCallback, stopSignal });
+      clearPreviousHighlight();
+      const finalResult = `\n\n<strong>【Final Result】</strong>\n${stepList[stepList.length - 1]}`;
+      stepsDiv.innerHTML += finalResult;
+      if (stepList.length === 1 && !LambdaCalculusCore.betaReduceOneStep(expandedAST)) {
+        stepsDiv.innerHTML += "\n(Already in normal form)";
+      }
+      // 評価の最後に全体をスクロール
+      stepsDiv.scrollTop = stepsDiv.scrollHeight;
+      return "";
+    }
+  } catch (e) {
+    console.error("Error during processing:", e);
+    clearPreviousHighlight();
+    return "Error: " + e.message; 
+  }
+}
+
+async function evaluateInput() {
+  const inputArea = document.getElementById("inputArea");
+  const stepsDiv = document.getElementById("steps");
+  const evaluateBtn = document.getElementById("evaluateBtn");
+  const stopBtn = document.getElementById("stopBtn");
+  let rawInputText = inputArea.value;
+  if (!rawInputText.trim()) return;
+  evaluationStopped = false;
+  evaluateBtn.disabled = true;
+  stopBtn.style.display = "inline-block";
+  stepsDiv.textContent = "";
+  document.getElementById("stepCounter").textContent = "Steps executed: 0";
+  let evaluationSuccessful = false;
+  try {
+    let commentedRemovedText = removeComments(rawInputText);
+    let expressions = commentedRemovedText.includes(";") 
+      ? commentedRemovedText.split(";").map(expr => expr.trim()).filter(expr => expr.length > 0) 
+      : [commentedRemovedText.trim()].filter(expr => expr.length > 0);
+    if (expressions.length === 0) {
+      stepsDiv.textContent = "No valid expressions found. Input might be empty or comments only.";
+      return;
+    }
+    let results = [];
+    for (let expr of expressions) {
+      if (evaluationStopped) break;
+      if (expr.trim()) {
+        let result = await processExpression(expr.trim());
+        if (result) results.push(result);
+      }
+    }
+    if (results.length > 0) {
+      stepsDiv.innerHTML += "\n\n" + results.join("\n\n----------\n\n");
+      // 定義やエラーのサマリー表示後に全体をスクロール
+      stepsDiv.scrollTop = stepsDiv.scrollHeight;
+    }
+    if (!evaluationStopped) {
+      evaluationSuccessful = true;
+    }
+  } catch (e) {
+    stepsDiv.innerHTML += "\n\nAn unexpected error occurred: " + e.message;
+    console.error("Outer catch in evaluateInput:", e);
+    // 予期せぬエラー表示後にも全体をスクロール
+    stepsDiv.scrollTop = stepsDiv.scrollHeight;
+  } finally {
+    evaluateBtn.disabled = false;
+    stopBtn.style.display = "none";
+    updateEnvironmentDisplay();
+    if (evaluationSuccessful) {
+      inputArea.value = "";
+    }
+  }
+}
+
+function stopEvaluation() {
+  evaluationStopped = true;
+  document.getElementById("steps").innerHTML += "\n\n<strong style='color: var(--highlight-text-color);'>Evaluation stopped by user.</strong>";
+  clearPreviousHighlight();
+  document.getElementById("steps").scrollTop = document.getElementById("steps").scrollHeight;
+}
+
+function resetEnvironment() {
+  LambdaCalculusCore.resetEnvironment();
+  updateEnvironmentDisplay();
+  document.getElementById("steps").textContent = "Environment has been reset.";
+  document.getElementById("stepCounter").textContent = "Steps executed: 0";
+  document.getElementById("inputArea").value = ""; 
+}
+
+function updateEnvironmentDisplay() {
+  const envDiv = document.getElementById("envList");
+  let lines = Object.keys(LambdaCalculusCore.environment).map(k => {
+    try {
+      return k + " = " + LambdaCalculusCore.exprToString(LambdaCalculusCore.environment[k]) + "; ";
+    } catch (e) {
+      return k + " = (Error displaying: " + e.message + "); ";
+    }
+  });
+  envDiv.textContent = lines.length ? lines.join("\n") : "(No definitions yet)";
+}
+
+// ---- Event Listener Registration ----
+document.getElementById("evaluateBtn").addEventListener("click", evaluateInput);
+document.getElementById("resetEnvBtn").addEventListener("click", resetEnvironment);
+document.getElementById("stopBtn").addEventListener("click", stopEvaluation);
+
+// Initial display update
+updateEnvironmentDisplay();
+
+</script>
+
+</body>
+</html>
