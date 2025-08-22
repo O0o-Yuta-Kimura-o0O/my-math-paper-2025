@@ -1,4 +1,4 @@
-# Constructing New Numbers (ver.1)
+# Constructing New Numbers (ver.1.1, cleaned)
 
 - Created: 22 Aug 2025  
 - First publication: 11 Aug 2025  
@@ -97,11 +97,11 @@ where \(a^{(k)}\) will be represented via an isomorphism in §5 (\(k\in\mathbb{Z
 > Caution. `qlim` **does not return a classical real value**; it names an **equivalence class of directed generation procedures**.
 
 ### 4.4 Lemma (Independence of \(b\))
-**Claim.** For fixed \(a\in\mathbb{Q}\) and any \(b_1,b_2>0\), the sequences \(q_n^{+}(a;b_1)\) and \(q_n^{+}(a;b_2)\) are **tail‑equivalent**, hence define the same `qlim` class. Likewise for the lower side.
+**Claim.** For fixed \(a\in\mathbb{Q}\) and any \(b_1,b_2>0\), the sequences \(q_n^{+}(a;b_1)\) and \(q_n^{+}(a;b_2)\) are **tail‑equivalent**, hence define the same `qlim` class. Likewise for the lower side.  
 **Proof (formal).** Define tail‑equivalence \(\sim\) by: for sequences \((x_n),(y_n)\), we have \(x\sim y\) iff \(\forall\varepsilon>0\,\exists N\,\forall n\ge N\,|x_n-y_n|<\varepsilon\). Put \(x_n=a+b_1/n\), \(y_n=a+b_2/n\). Then \(|x_n-y_n|=|b_1-b_2|/n\). For any \(\varepsilon>0\) choose \(N>|b_1-b_2|/\varepsilon\). Then \(n\ge N\) implies \(|x_n-y_n|<\varepsilon\). Both sequences are monotone with lower bound \(a\). Hence the same `qlim` class. ∎
 
 ### 4.5 Lemma (Reindexing invariance)
-**Claim.** For \(k,c\in\mathbb{N}\), \(r_n:=q_{kn+c}^{+}(a;b)\) is tail‑equivalent to \(q_n^{+}(a;b)\). Likewise for the lower side.
+**Claim.** For \(k,c\in\mathbb{N}\), \(r_n:=q_{kn+c}^{+}(a;b)\) is tail‑equivalent to \(q_n^{+}(a;b)\). Likewise for the lower side.  
 **Proof (formal).** With \(s_n=a+b/n\) and \(r_n=a+b/(kn+c)\), the difference \(d_n=r_n-s_n=-b((k-1)n+c)/(n(kn+c))\) tends to 0. Hence \(r\sim s\). Monotonicity holds since the denominator increases in \(n\). ∎
 
 ### 4.6 Definition (Neighbor classes)
@@ -110,18 +110,18 @@ Define the **upper** class \(N^{+}(a)\) as \(\{ q_n^{+}(a;b)\mid b>0\}\) modulo 
 > Note. For this chapter we restrict representatives to \((n\cdot a\pm b)/n\). Allowing wider monotone families would require extending the equivalence, which is unnecessary here.
 
 ### 4.7 Proposition (Tail‑equivalence is an equivalence relation)
-**Claim.** \(\sim\) is an equivalence relation on the set of rational sequences.
+**Claim.** \(\sim\) is an equivalence relation on the set of rational sequences.  
 **Proof.** Reflexive: \(|x_n-x_n|=0\). Symmetric: \(|y_n-x_n|=|x_n-y_n|\). Transitive: use \(\varepsilon/2\) and \(N=\max(N_1,N_2)\). ∎
 
 ### 4.8 Lemma (Non‑emptiness and uniqueness of \(N^{+}(a),N^{-}(a)\))
-**Claim.** For every \(a\in\mathbb{Q}\), both \(N^{+}(a)\) and \(N^{-}(a)\) are non‑empty and uniquely determined as equivalence classes.
+**Claim.** For every \(a\in\mathbb{Q}\), both \(N^{+}(a)\) and \(N^{-}(a)\) are non‑empty and uniquely determined as equivalence classes.  
 **Proof.** Non‑empty: take \(b=1\). Uniqueness: 4.4 shows independence of \(b\); 4.5 shows reindexing invariance. ∎
 
 ### 4.9 Proposition (Well‑definedness of \(a\mapsto a##\) and \(a\mapsto a\,\!\mathbin{\flat\flat}\))
 **Claim.** For each \(a\in\mathbb{Q}\), the elements \(a##\) and \(a\,\!\mathbin{\flat\flat}\) are independent of representatives and define unique elements \(a^{(+1)}, a^{(-1)}\in M\). Thus the maps \(S^{+}:\mathbb{Q}\to M\), \(S^{-}:\mathbb{Q}\to M\) given by \(S^{+}(a)=a^{(+1)}\) and \(S^{-}(a)=a^{(-1)}\) are well‑defined. ∎
 
 ### 4.10 Proposition (Monotonicity and injectivity of \(S^{+},S^{-}\))
-**Claim.** If \(a<b\) then \(S^{+}(a)<S^{+}(b)\) and \(S^{-}(a)<S^{-}(b)\); both maps are injective.
+**Claim.** If \(a<b\) then \(S^{+}(a)<S^{+}(b)\) and \(S^{-}(a)<S^{-}(b)\); both maps are injective.  
 **Proof.** In lexicographic order on \(M\), \((a,1)<(b,1)\) and \((a,-1)<(b,-1)\) for \(a<b\). Injectivity is immediate. ∎
 
 ### 4.11 Proposition (One‑sided boundedness and boundary at \(a^{(0)}\))
@@ -165,7 +165,7 @@ Define \(S^{+}(a):=a^{(+1)}\) (\(=a##\)), \(S^{-}(a):=a^{(-1)}\) (\(=a\,\!\mathb
 1. \(a^{(k)}+b^{(\ell)}=(a+b)^{(k+\ell)}\).
 2. \(m\cdot a^{(k)}=(ma)^{(mk)}\) (\(m\in\mathbb{Z}\)).
 
-**Indivisibility (integer gradedness).**
+**Indivisibility (integer gradedness).**  
 **Prop. 5.4.1.** There is **no half‑step in \(M\)**: there is no \(x\in M\) with \(2x=a^{(+1)}\).  
 *Proof (\(\varepsilon\)-model).* Writing \(x=r+m\varepsilon\) with \(r\in\mathbb{Q}, m\in\mathbb{Z}\), we would need \(2r=0\) and \(2m=1\), impossible. ∎
 
@@ -252,16 +252,17 @@ If \(\operatorname{NF}(x)=(A,B)\) and \(\operatorname{NF}(y)=(C,D)\), then
 ---
 
 ## 8. Containment of Number Systems
-\[
- \mathbb{N}\ (repeated application)
- \;\subset\; \mathbb{Z}\ (signed naturals)
- \;\subset\; \mathbb{Q}\ (fractions of integers)
- \;\subset\; M\ (rational near‑limits: upper/lower layers)
- \;\subset\; \mathrm{CR}\ (fractions of \(M\))
- \;\subset\; \mathrm{CC}\ (matrix form of \(\mathrm{CR}\))
-\]
 
-> Note. \(M,\mathrm{CR},\mathrm{CC}\) are structures specific to this work; extensions to new quaternions or octonions are possible.
+$$
+ \mathbb{N}\ \text{(repeated application)}
+ \;\subset\; \mathbb{Z}\ \text{(signed naturals)}
+ \;\subset\; \mathbb{Q}\ \text{(fractions of integers)}
+ \;\subset\; M\ \text{(rational near-limits: upper/lower layers)}
+ \;\subset\; \mathrm{CR}\ \text{(fractions of } M \text{)}
+ \;\subset\; \mathrm{CC}\ \text{(matrix form of } \mathrm{CR} \text{)}
+$$
+
+> Note. $M$, $\mathrm{CR}$, and $\mathrm{CC}$ are structures specific to this work; extensions to new quaternions or octonions are possible.
 
 ---
 
