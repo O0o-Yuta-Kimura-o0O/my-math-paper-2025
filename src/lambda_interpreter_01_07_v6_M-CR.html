@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Untyped Lambda Calculus Interpreter (v6 + M/CR minimal language)</title>
+<style>
+  :root {
+    --bg-color: #282c34; --text-color: #abb2bf; --border-color: #4b5263;
+    --highlight-bg-color: #3a3f4b; --highlight-text-color: #e6e6e6;
+    --button-bg-color: #4b5263; --button-hover-bg-color: #5c6370;
+    --stop-button-bg-color: #5c6370; --font-size: 14px;
+    --font-family: 'Menlo','Consolas','Monaco',monospace;
+  }
+  html,body{height:100%;margin:0;overflow:hidden}
+  body{background:var(--bg-color);color:var(--text-color);font-family:var(--font-family);font-size:var(--font-size)}
+  .container{height:100%;display:flex;flex-direction:column;padding:1.5em;box-sizing:border-box}
+  header{flex-shrink:0;display:flex;flex-direction:column;gap:1em;margin-bottom:1em}
+  h1,h3{font-size:var(--font-size);font-weight:bold;color:var(--highlight-text-color);margin:0}
+  .button-bar{display:flex;gap:10px;flex-wrap:wrap}
+  button{background:var(--button-bg-color);color:var(--highlight-text-color);border:1px solid var(--border-color);
+    padding:8px 12px;border-radius:4px;cursor:pointer;font-family:var(--font-family);font-size:var(--font-size);
+    transition:background-color .2s}
+  button:hover{background:var(--button-hover-bg-color)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  #stopBtn{display:none;background:var(--stop-button-bg-color)}
+  #stepCounter{font-weight:bold;color:var(--highlight-text-color)}
+  .main-content{flex-grow:1;display:flex;flex-direction:column;gap:1em;min-height:0}
+  textarea,.display-area{width:100%;box-sizing:border-box;background:var(--highlight-bg-color);color:var(--text-color);
+    border:1px solid var(--border-color);border-radius:4px;padding:10px;font-family:var(--font-family);font-size:var(--font-size)}
+  #inputArea{flex:2;min-height:60px;resize:none}
+  #steps{flex:2;min-height:60px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+  .env-container{flex:1;min-height:40px;display:flex;flex-direction:column}
+  #envList{overflow-y:auto;white-space:pre-wrap;word-break:break-all;flex-grow:1;margin-top:10px}
+  .current-step{background:var(--button-bg-color);padding:2px;border-radius:2px;color:var(--highlight-text-color)}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Untyped Lambda Calculus Interpreter (v6 + M/CR)</h1>
+    <div class="button-bar">
+      <button id="evaluateBtn">Evaluate (or Define)</button>
+      <button id="resetEnvBtn">Reset Definitions</button>
+      <button id="stopBtn">Stop Evaluation</button>
+    </div>
+    <div id="stepCounter">Steps executed: 0</div>
+  </header>
+  
+  <div class="main-content">
+    <textarea id="inputArea" placeholder="Examples:
+; M-add: 1♭ + 1#   →  M_add (Rel_minus1 1) (Rel_plus1 1)
+; M-sub: 0## - 0### →  M_sub (Rel_plus2 0) (Rel_plus3 0)
+; CR-div (normalizes to 1): 0♭/0♭ → cr_divM (Rel_minus1 0) (Rel_minus1 0)
+
+M_add (Rel_minus1 1) (Rel_plus1 1)
+"></textarea>
+    <div id="steps" class="display-area"></div>
+    <div class="env-container display-area">
+      <h3>Current Environment (Name Definitions)</h3>
+      <div id="envList">(No definitions yet)</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/*
+  v6 core (scoped env + one-time expansion cache + surface language),
+  then we bootstrap the M/CR minimal language as pure λ-terms.
+  v6 の詳細は v4→v6 連続の設計に準拠。:contentReference[oaicite:3]{index=3}
+*/
+
+// ---- λ式ノード ----
+class Var  { constructor(name){ this.tag="Var"; this.name=name; } }
+class Lambda{ constructor(param,body){ this.tag="Lambda"; this.param=param; this.body=body; } }
+class App  { constructor(fn,arg){ this.tag="App"; this.fn=fn; this.arg=arg; } }
+
+// ================================================================
+// Core
+// ================================================================
+const LambdaCalculusCore = {
+  environment: {},
+  resetEnvironment(){ this.environment = {}; },
+  // --- 表層言語（## / ♭♭等） ---
+  surfaceToCore(input){
+    const FLAT = "\u266D"; // ♭
+    const parts = input.split(/(\s+)/);
+    function toPlusName(n){ return `Rel_plus${n}`; }
+    function toMinusName(n){ return `Rel_minus${n}`; }
+    function transformToken(tok){
+      if(!tok || tok.trim().length===0) return tok;
+      let m = tok.match(/^([a-zA-Z_][a-zA-Z0-9_]*)(#+)$/);
+      if(m){ const id=m[1], n=m[2].length; return `(${toPlusName(n)} ${id})`; }
+      m = tok.match(new RegExp(`^([a-zA-Z_][a-zA-Z0-9_]*)(`+FLAT+`+)$`));
+      if(m){ const id=m[1], n=m[2].length; return `(${toMinusName(n)} ${id})`; }
+      m = tok.match(/^(#+)([a-zA-Z_][a-zA-Z0-9_]*)$/);
+      if(m){ const n=m[1].length, id=m[2]; return `(${toPlusName(n)} ${id})`; }
+      m = tok.match(new RegExp(`^(`+FLAT+`+)([a-zA-Z_][a-zA-Z0-9_]*)$`));
+      if(m){ const n=m[1].length, id=m[2]; return `(${toMinusName(n)} ${id})`; }
+      m = tok.match(/^(#+)$/);
+      if(m){ const n=m[1].length; return toPlusName(n); }
+      m = tok.match(new RegExp(`^(`+FLAT+`+)$`));
+      if(m){ const n=m[1].length; return toMinusName(n); }
+      return tok;
+    }
+    for(let i=0;i<parts.length;i++){ parts[i] = transformToken(parts[i]); }
+    return parts.join('');
+  },
+
+  define(name, definitionStrRaw){
+    if(name === definitionStrRaw) throw new Error("Definition error: self-reference: "+name);
+    const definitionStr = this.surfaceToCore(definitionStrRaw);
+    const tokens = this.tokenize(definitionStr);
+    const exprAST = this.parseExpr(tokens);
+    if(tokens.length>0) throw new Error("Parse error (def): "+tokens.join(" "));
+    this.environment[name] = exprAST;
+    return "Defined: "+name+" = "+this.exprToString(exprAST);
+  },
+
+  tokenize(str){
+    return str.replace(/\(/g," ( ").replace(/\)/g," ) ").replace(/\./g," . ")
+      .replace(/λ/g," λ ").replace(/\\/g," λ ").split(/\s+/).filter(t=>t.length>0);
+  },
+
+  parse(str){
+    const tokens = this.tokenize(this.surfaceToCore(str));
+    const ast = this.parseExpr(tokens);
+    if(tokens.length>0) throw new Error("Parse error: "+tokens.join(" "));
+    return ast;
+  },
+
+  parseExpr(tokens){
+    if(tokens.length===0) throw new Error("Parse error: No tokens");
+    if(tokens[0]==="λ"){
+      tokens.shift();
+      if(tokens.length===0) throw new Error("Parse error: Expected param after λ");
+      let param = tokens.shift();
+      if(!param.match(/^[a-zA-Z0-9_]+$/)) throw new Error("Parse error: bad param "+param);
+      if(tokens.length===0 || tokens[0]!==".") throw new Error("Parse error: '.' expected after λ"+param);
+      tokens.shift();
+      let body = this.parseExpr(tokens);
+      return new Lambda(param, body);
+    }else{
+      return this.parseApp(tokens);
+    }
+  },
+
+  parseApp(tokens){
+    let left = this.parseFactor(tokens);
+    while(tokens.length>0 && tokens[0]!==")" && tokens[0]!="." && tokens[0]!=="="){
+      if(tokens[0]==="λ") break;
+      let right = this.parseFactor(tokens);
+      left = new App(left, right);
+    }
+    return left;
+  },
+
+  parseFactor(tokens){
+    if(tokens.length===0) throw new Error("Parse error: Expected factor");
+    let t = tokens.shift();
+    if(t==="("){
+      let e = this.parseExpr(tokens);
+      if(tokens.length===0 || tokens[0]!==")") throw new Error("Parse error: ')' expected");
+      tokens.shift(); return e;
+    }else if(t.match(/^[a-zA-Z0-9_]+$/)){
+      return new Var(t);
+    }else{
+      throw new Error("Parse error: token "+t);
+    }
+  },
+
+  exprToString(e){
+    if(!e) return "(null)";
+    switch(e.tag){
+      case "Var": return e.name;
+      case "Lambda": return "(λ"+e.param+"."+this.exprToString(e.body)+")";
+      case "App": return "("+this.exprToString(e.fn)+" "+this.exprToString(e.arg)+")";
+    }
+  },
+
+  deepCopy(expr){
+    if(!expr) return null;
+    switch(expr.tag){
+      case "Var": return new Var(expr.name);
+      case "Lambda": return new Lambda(expr.param, this.deepCopy(expr.body));
+      case "App": return new App(this.deepCopy(expr.fn), this.deepCopy(expr.arg));
+      default: throw new Error("deepCopy: unknown");
+    }
+  },
+
+  freeVariables(expr){
+    const fv = new Set();
+    function go(e, bound){
+      if(!e) return;
+      switch(e.tag){
+        case "Var": if(!bound.has(e.name)) fv.add(e.name); break;
+        case "Lambda": { const b=new Set(bound); b.add(e.param); go(e.body,b); break; }
+        case "App": go(e.fn,bound); go(e.arg,bound); break;
+      }
+    }
+    go(expr, new Set()); return fv;
+  },
+
+  generateFreshVar(base, forbidden){
+    if(!forbidden.has(base)) return base;
+    let i=1, name=base+"_"+i;
+    while(forbidden.has(name)){ i++; name=base+"_"+i; if(i>1000) throw new Error("fresh var overflow"); }
+    return name;
+  },
+
+  substitute(expr, v, val){
+    if(!expr) throw new Error("substitute: null");
+    switch(expr.tag){
+      case "Var": return expr.name===v ? this.deepCopy(val) : expr;
+      case "App": return new App(this.substitute(expr.fn,v,val), this.substitute(expr.arg,v,val));
+      case "Lambda":{
+        const p=expr.param, b=expr.body;
+        if(p===v) return expr;
+        const fvVal = this.freeVariables(val);
+        if(!fvVal.has(p)){
+          return new Lambda(p, this.substitute(b,v,val));
+        }else{
+          const forbid = this.freeVariables(b); fvVal.forEach(x=>forbid.add(x));
+          const np = this.generateFreshVar(p, forbid);
+          const nb = this.substitute(b, p, new Var(np));
+          return new Lambda(np, this.substitute(nb, v, val));
+        }
+      }
+      default: throw new Error("substitute: unknown tag");
+    }
+  },
+
+  // スコープ安全 + 一度きり展開（共有）
+  expandByEnv(expr, visited=new Set(), bound=new Set(), cache=new Map()){
+    if(!expr) throw new Error("expandByEnv: null");
+    switch(expr.tag){
+      case "Var":{
+        if(bound.has(expr.name)) return expr;
+        if(this.environment[expr.name]){
+          if(visited.has(expr.name)) throw new Error("Cyclic reference: "+expr.name);
+          if(cache.has(expr.name)) return cache.get(expr.name);
+          const nv=new Set(visited); nv.add(expr.name);
+          const expanded = this.expandByEnv(this.deepCopy(this.environment[expr.name]), nv, bound, cache);
+          cache.set(expr.name, expanded); return expanded;
+        }
+        return expr;
+      }
+      case "Lambda":{
+        const nb=new Set(bound); nb.add(expr.param);
+        return new Lambda(expr.param, this.expandByEnv(expr.body, visited, nb, cache));
+      }
+      case "App":
+        return new App(this.expandByEnv(expr.fn, visited, bound, cache),
+                       this.expandByEnv(expr.arg, visited, bound, cache));
+      default: throw new Error("expandByEnv: unknown tag");
+    }
+  },
+
+  betaReduceOneStep(expr){
+    if(!expr) return null;
+    if(expr.tag==="App"){
+      if(expr.fn.tag==="Lambda"){
+        return this.substitute(expr.fn.body, expr.fn.param, expr.arg);
+      }
+      let rf=this.betaReduceOneStep(expr.fn); if(rf) return new App(rf, expr.arg);
+      let ra=this.betaReduceOneStep(expr.arg); if(ra) return new App(expr.fn, ra);
+      return null;
+    }else if(expr.tag==="Lambda"){
+      let rb=this.betaReduceOneStep(expr.body); if(rb) return new Lambda(expr.param, rb);
+      return null;
+    }
+    return null;
+  },
+
+  async evaluateRealtime(expr, {maxSteps=100000,onStep,stopSignal}){
+    if(!expr) throw new Error("evaluateRealtime: null");
+    let cur=expr, steps=[this.exprToString(cur)]; if(onStep) await onStep(steps[0],0);
+    for(let i=0;i<maxSteps && !stopSignal.stopped;i++){
+      let nxt=this.betaReduceOneStep(cur); if(!nxt) break;
+      cur=nxt; const s=this.exprToString(cur); steps.push(s); if(onStep) await onStep(s,i+1);
+      if(i%10===0) await new Promise(r=>setTimeout(r,0));
+      if(i===maxSteps-1 && this.betaReduceOneStep(cur)) throw new Error("Reduction step limit reached.");
+    }
+    if(stopSignal.stopped) throw new Error("Evaluation stopped.");
+    return steps;
+  }
+};
+
+// ================================================================
+// UI
+// ================================================================
+let evaluationStopped=false;
+
+function removeComments(str){
+  return str.split('\n').map(line=>{
+    const i=line.indexOf('//'); return i!==-1 ? line.substring(0,i) : line;
+  }).join('\n');
+}
+
+function displayStep(stepText, stepNumber){
+  const stepsDiv=document.getElementById("steps");
+  const stepCounterDiv=document.getElementById("stepCounter");
+  const prev=stepsDiv.querySelector('.current-step'); if(prev) prev.classList.remove('current-step');
+  const el=document.createElement("div");
+  el.textContent = (stepNumber===0 ? "Initial: " : "Step "+stepNumber+": ")+stepText;
+  stepsDiv.appendChild(el); el.classList.add('current-step');
+  stepCounterDiv.textContent="Steps executed: "+(stepNumber+1);
+  stepsDiv.scrollTop=stepsDiv.scrollHeight;
+}
+
+function clearPreviousHighlight(){
+  const prev=document.getElementById("steps").querySelector('.current-step');
+  if(prev) prev.classList.remove('current-step');
+}
+
+async function processExpression(inputText){
+  try{
+    if(!inputText.trim()) return "";
+    let eq = inputText.indexOf("=");
+    if(eq>0
+      && inputText.substring(0,eq).trim().match(/^[a-zA-Z0-9_]+$/)
+      && (inputText.indexOf("=",eq+1)===-1 || !inputText.substring(eq+1).trim().includes("="))){
+      let name=inputText.substring(0,eq).trim();
+      let defRaw=inputText.substring(eq+1).trim();
+      return LambdaCalculusCore.define(name, defRaw);
+    }else{
+      const stepsDiv=document.getElementById("steps");
+      stepsDiv.innerHTML = `<strong>【Input Expression】</strong>\n${inputText}\n\n`;
+      const pre = LambdaCalculusCore.surfaceToCore(inputText);
+      let ast = LambdaCalculusCore.parse(pre);
+      const cache=new Map();
+      let expanded = LambdaCalculusCore.expandByEnv(ast, new Set(), new Set(), cache);
+      const s0 = LambdaCalculusCore.exprToString(ast);
+      const s1 = LambdaCalculusCore.exprToString(expanded);
+      if(s1!==s0) stepsDiv.innerHTML += `<strong>【After Surface→Core & Environment Expansion】</strong>\n${s1}\n\n`;
+      stepsDiv.innerHTML += "<strong>【Evaluation Steps】</strong>\n";
+      const onStep = async (s,i)=>displayStep(s,i);
+      const stopSig = { get stopped(){ return evaluationStopped; } };
+      let list = await LambdaCalculusCore.evaluateRealtime(expanded,{onStep,stopSignal:stopSig});
+      clearPreviousHighlight();
+      stepsDiv.innerHTML += `\n\n<strong>【Final Result】</strong>\n${list[list.length-1]}`;
+      if(list.length===1 && !LambdaCalculusCore.betaReduceOneStep(expanded)){
+        stepsDiv.innerHTML += "\n(Already in normal form)";
+      }
+      stepsDiv.scrollTop=stepsDiv.scrollHeight;
+      return "";
+    }
+  }catch(e){
+    console.error("Error:",e); clearPreviousHighlight(); return "Error: "+e.message;
+  }
+}
+
+async function evaluateInput(){
+  const inputArea=document.getElementById("inputArea");
+  const stepsDiv=document.getElementById("steps");
+  const evaluateBtn=document.getElementById("evaluateBtn");
+  const stopBtn=document.getElementById("stopBtn");
+  let raw=inputArea.value; if(!raw.trim()) return;
+  evaluationStopped=false; evaluateBtn.disabled=true; stopBtn.style.display="inline-block";
+  stepsDiv.textContent=""; document.getElementById("stepCounter").textContent="Steps executed: 0";
+  let ok=false;
+  try{
+    let noComment = removeComments(raw);
+    let exprs = noComment.includes(";")
+      ? noComment.split(";").map(s=>s.trim()).filter(s=>s.length>0)
+      : [noComment.trim()].filter(s=>s.length>0);
+    if(exprs.length===0){ stepsDiv.textContent="No valid expressions."; return; }
+    let results=[];
+    for(const ex of exprs){
+      if(evaluationStopped) break;
+      let r = await processExpression(ex.trim()); if(r) results.push(r);
+    }
+    if(results.length>0){ stepsDiv.innerHTML += "\n\n"+results.join("\n\n----------\n\n"); stepsDiv.scrollTop=stepsDiv.scrollHeight; }
+    if(!evaluationStopped) ok=true;
+  }catch(e){
+    stepsDiv.innerHTML += "\n\nAn unexpected error occurred: "+e.message;
+    console.error("Outer:",e); stepsDiv.scrollTop=stepsDiv.scrollHeight;
+  }finally{
+    evaluateBtn.disabled=false; stopBtn.style.display="none";
+    updateEnvironmentDisplay(); if(ok) inputArea.value="";
+  }
+}
+
+function stopEvaluation(){
+  evaluationStopped=true;
+  document.getElementById("steps").innerHTML += "\n\n<strong style='color: var(--highlight-text-color);'>Evaluation stopped by user.</strong>";
+  clearPreviousHighlight();
+  document.getElementById("steps").scrollTop=document.getElementById("steps").scrollHeight;
+}
+
+function resetEnvironment(){
+  LambdaCalculusCore.resetEnvironment(); updateEnvironmentDisplay();
+  document.getElementById("steps").textContent="Environment has been reset.";
+  document.getElementById("stepCounter").textContent="Steps executed: 0";
+  document.getElementById("inputArea").value="";
+}
+
+function updateEnvironmentDisplay(){
+  const envDiv=document.getElementById("envList");
+  let lines = Object.keys(LambdaCalculusCore.environment).map(k=>{
+    try{ return k+" = "+LambdaCalculusCore.exprToString(LambdaCalculusCore.environment[k])+"; "; }
+    catch(e){ return k+" = (Error displaying: "+e.message+"); "; }
+  });
+  envDiv.textContent = lines.length ? lines.join("\n") : "(No definitions yet)";
+}
+
+document.getElementById("evaluateBtn").addEventListener("click", evaluateInput);
+document.getElementById("resetEnvBtn").addEventListener("click", resetEnvironment);
+document.getElementById("stopBtn").addEventListener("click", stopEvaluation);
+
+// ================================================================
+// Bootstrap: M/CR minimal language (pure λ-terms)
+// ================================================================
+function bootstrap_MCR(){
+  const D = (n, body) => LambdaCalculusCore.define(n, body);
+
+  // --- 基本：Pair / Bool / Church Nat ---
+  D("Pair", "\\a.\\b.\\f. f a b");
+  D("Fst",  "\\p. p (\\a.\\b. a)");
+  D("Snd",  "\\p. p (\\a.\\b. b)");
+
+  D("True",  "\\t.\\f. t");
+  D("False", "\\t.\\f. f");
+  D("If",    "\\b.\\t.\\e. b t e");
+  D("And",   "\\p.\\q. p q p");
+  D("Or",    "\\p.\\q. p p q");
+  D("Not",   "\\b. b False True");
+
+  D("Zero", "\\f.\\x. x");
+  D("Succ", "\\n.\\f.\\x. f (n f x)");
+  D("One",  "Succ Zero");
+  D("Two",  "Succ One");
+  D("Three","Succ Two");
+  D("Four", "Succ Three");
+
+  D("Add",  "\\m.\\n.\\f.\\x. m f (n f x)");
+  D("Mul",  "\\m.\\n.\\f.\\x. m (n f) x");
+  D("Pred", "\\n.\\f.\\x. n (\\g.\\h. h (g f)) (\\u. x) (\\u. u)");
+  D("Sub",  "\\m.\\n. n Pred m");
+  D("IsZero","\\n. n (\\x. False) True");
+  D("Leq",  "\\m.\\n. IsZero (Sub m n)");
+  D("EqNat","\\m.\\n. And (Leq m n) (Leq n m)");
+
+  // 別名（数）：N0..N4 （※ '0','1','2' は有理数として後で上書き）
+  D("N0","Zero"); D("N1","One"); D("N2","Two"); D("N3","Three"); D("N4","Four");
+
+  // --- 整数 Z : 差 (a,b) = a-b ---
+  D("Z",        "Pair");
+  D("Z_of_nat", "\\n. Pair n N0");
+  D("Z_neg",    "\\p. Pair (Snd p) (Fst p)");
+  D("Z_add",    "\\p.\\q. Pair (Add (Fst p) (Fst q)) (Add (Snd p) (Snd q))");
+  D("Z_sub",    "\\p.\\q. Z_add p (Z_neg q)");
+  D("Z_mul",    "\\p.\\q. Pair (Add (Mul (Fst p) (Fst q)) (Mul (Snd p) (Snd q))) (Add (Mul (Fst p) (Snd q)) (Mul (Snd p) (Fst q)))");
+  D("EqZ",      "\\p.\\q. EqNat (Add (Fst p) (Snd q)) (Add (Snd p) (Fst q))");
+
+  // Z 定数
+  D("ZN0","Z_of_nat N0");
+  D("ZN1","Z_of_nat N1");
+  D("ZN2","Z_of_nat N2");
+  D("ZN3","Z_of_nat N3");
+  D("ZN4","Z_of_nat N4");
+  D("ZNeg1","Z_neg ZN1");
+  D("ZNeg2","Z_neg ZN2");
+  D("ZNeg3","Z_neg ZN3");
+  D("ZNeg4","Z_neg ZN4");
+
+  // --- 有理 Rat = (numZ, denZ) ---
+  D("Rat",    "Pair");
+  D("rat_mk","\\num.\\den. Pair num den");
+  D("rat_num","Fst");
+  D("rat_den","Snd");
+  D("rat_add","\\x.\\y. Pair (Z_add (Z_mul (Fst x) (Snd y)) (Z_mul (Fst y) (Snd x))) (Z_mul (Snd x) (Snd y))");
+  D("rat_sub","\\x.\\y. Pair (Z_sub (Z_mul (Fst x) (Snd y)) (Z_mul (Fst y) (Snd x))) (Z_mul (Snd x) (Snd y))");
+  D("rat_mul","\\x.\\y. Pair (Z_mul (Fst x) (Fst y)) (Z_mul (Snd x) (Snd y))");
+  D("rat_div","\\x.\\y. Pair (Z_mul (Fst x) (Snd y)) (Z_mul (Snd x) (Fst y))");
+  D("EqRat",  "\\x.\\y. EqZ (Z_mul (Fst x) (Snd y)) (Z_mul (Fst y) (Snd x))");
+
+  // 有理 定数（分母は 1）
+  D("Q0",   "Pair ZN0 ZN1");  // 0/1
+  D("Q1",   "Pair ZN1 ZN1");  // 1/1
+  D("Q2",   "Pair ZN2 ZN1");  // 2/1
+  D("QHalf","Pair ZN1 ZN2");  // 1/2
+
+  // 使い勝手用：'0','1','2','half' を Rat に割当（※数値記号を有理にする）
+  D("0","Q0"); D("1","Q1"); D("2","Q2"); D("half","QHalf");
+
+  // --- 連続順序数 M = (kZ, aRat) ---
+  D("M","Pair");
+  D("m_k","Fst"); D("m_a","Snd");
+  D("M_of_Q","\\a. Pair ZN0 a");
+  D("M_add","\\u.\\v. Pair (Z_add (Fst u) (Fst v)) (rat_add (Snd u) (Snd v))");
+  D("M_sub","\\u.\\v. Pair (Z_sub (Fst u) (Fst v)) (rat_sub (Snd u) (Snd v))");
+  D("EqM",  "\\u.\\v. And (EqZ (Fst u) (Fst v)) (EqRat (Snd u) (Snd v))");
+
+  // ## / ♭♭ の表層糖衣に対応（必要に応じて長さを追加）
+  D("Rel_plus1",  "\\a. Pair ZN1 a");
+  D("Rel_plus2",  "\\a. Pair ZN2 a");
+  D("Rel_plus3",  "\\a. Pair ZN3 a");
+  D("Rel_plus4",  "\\a. Pair ZN4 a");
+  D("Rel_minus1", "\\a. Pair ZNeg1 a");
+  D("Rel_minus2", "\\a. Pair ZNeg2 a");
+  D("Rel_minus3", "\\a. Pair ZNeg3 a");
+  D("Rel_minus4", "\\a. Pair ZNeg4 a");
+
+  // --- 新実数 CR = (numM, denM) ---
+  D("CR","Pair");
+  D("cr_mk","\\num.\\den. Pair num den");
+
+  // M ÷ M → CR （最小の正規化：num==den なら 1 に潰す。一般化は第3章で）
+  D("CR_norm1","\\num.\\den. (EqM num den) Q1 (Pair num den)");
+  D("cr_divM","\\num.\\den. CR_norm1 num den");
+
+  // --- 動作確認に便利な例（必要なら有効化） ---
+  // D("ex1","M_add (Rel_minus1 1) (Rel_plus1 1)");     // 1♭ + 1# 
+  // D("ex2","M_sub (Rel_plus2 0) (Rel_plus3 0)");       // 0## - 0###
+  // D("ex3","cr_divM (Rel_minus1 0) (Rel_minus1 0)");   // 0♭ / 0♭ → 1
+
+  updateEnvironmentDisplay();
+}
+
+// 起動時にブート
+bootstrap_MCR();
+
+</script>
+
+</body>
+</html>
