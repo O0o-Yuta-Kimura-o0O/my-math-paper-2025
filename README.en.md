@@ -25,7 +25,7 @@ The system proposed in this work is based on several original concepts.
 
 ### ⚠️ Current Status
 
-This project is currently under active research and development. Therefore, **documents, code, directory structures, and file paths within this repository are subject to frequent changes.** The content of each chapter is also in a draft stage and will be expanded and revised in the future.
+This project is currently under active research and development. Therefore, **documents, code, directory structures, and file paths within this repository are subject to frequent changes.** The content of each chapter is also in a draft stage and will be expanded and revised in the future. There may also be errors in the interpreter source code or in the definitions and proofs in the text.
 
 ## Repository Structure
 
