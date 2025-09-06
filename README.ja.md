@@ -4,7 +4,7 @@
 
 ## このプロジェクトについて (About This Project)
 
-このリポジトリは、「数学の新しい基礎づけ」と題した研究および執筆プロジェクトの作業文書を管理するものです。本プロジェクトは、数学の基礎を\*\*「計算＝証拠 (Computation as Proof)」**という原則に置き、最小の計算モデルである**型なしλ計算\*\*を用いて、数体系（自然数、整数、有理数、そして独自の連続順序数・新実数）をゼロから再構築することを目指しています。ただし、数学の全てを完全に置き替えるものではありません。
+このリポジトリは、「数学の新しい基礎づけ」と題した研究および執筆プロジェクトの作業文書を管理するものです。本プロジェクトは、数学の基礎を\*\*「計算＝証拠 (Computation as Proof)」**という原則に置き、最小の計算モデルである**型なしλ計算\*\*を用いて、数体系（自然数、整数、有理数、そして独自の連続順序数・新実数）をゼロから再構築することを目指しています。ただし、数学の全てを完全に置き替えるものではありません。また、計算モデルに非依存の証明としてルール110を使った例も含んでいます。
 
 ### 中心的な概念 (Core Concepts)
 
@@ -21,7 +21,7 @@
 
 ### ⚠️ 現在のステータス (Current Status)
 
-このプロジェクトは現在、活発な研究・執筆の途上にあります。そのため、**リポジトリ内の文書やコード、ディレクトリ構成、ファイルパスは頻繁に変更される可能性があります。** 各章の記述もまだドラフト段階であり、今後加筆・修正される予定です。また、インタプリタのソースコードや、本文中の定義や証明のためのコードに誤りがある可能性があります。
+このプロジェクトは現在、活発な研究・執筆の途上にあります。そのため、**リポジトリ内の文書やコード、ディレクトリ構成、ファイルパスは頻繁に変更される可能性があります。** 各章の記述もまだドラフト段階であり、今後加筆・修正される予定です。また、インタプリタのソースコードや、本文中の定義や証明のためのコードに誤りがある可能性があります。ただし、現段階でも論文やソースコードの再利用や、第三者による紹介等は自由です。後にライセンスの表記があります。
 
 ## リポジトリ構成 (Repository Structure)
 
@@ -39,6 +39,36 @@
       * 連続順序数 $M$ の詳細な定義（順序、演算）と、新実数 $CR$ の実装（QPoly比、強い正規化、比較演算）について詳述。
   * **付録 (Appendices)**
       * λ計算で記述されたライブラリ本体（`Code Slot`）、規約の表、テストケースの具体例などを収録。
+
+## ファイル構成 (File Structure)
+
+---この論文の紹介---（他者からの感想）.md  // 簡単な紹介文の日本語版
+
+A_New_Foundation_of_Mathematics_en_01_v2.md  // 英語版の論文01〜07。
+A_New_Foundation_of_Mathematics_en_02_v2.md
+A_New_Foundation_of_Mathematics_en_03_v2.md
+A_New_Foundation_of_Mathematics_en_04_v2.md
+A_New_Foundation_of_Mathematics_en_05_v2.md
+A_New_Foundation_of_Mathematics_en_06_v2.md
+A_New_Foundation_of_Mathematics_en_07_v2.md
+
+A_New_Foundation_of_Mathematics_ja_01_v2.md  // 日本語版の論文01〜07。
+A_New_Foundation_of_Mathematics_ja_02_v2.md
+A_New_Foundation_of_Mathematics_ja_03_v2.md
+A_New_Foundation_of_Mathematics_ja_04_v2.md
+A_New_Foundation_of_Mathematics_ja_05_v2.md
+A_New_Foundation_of_Mathematics_ja_06_v2.md
+A_New_Foundation_of_Mathematics_ja_07_v2.md
+
+README.en.md  // READMEの英語版。
+README.ja.md  // READMEの日本語版。
+
+src / gui_design_style_v4.txt  // GUIデザインを統一するための基準。
+src / lambda_interpreter_v4.html  // ChatGPT 5 Proが修正する前のλ計算インタプリタhtml版。
+src / lambda_interpreter_v6_M-CR.html // λ計算インタプリタhtml版。
+src / texteditor_v4.html  // 簡易テキストエディタhtml版。
+
+origin / 1-new-number-composition-Japanese.txt  // 筆者が書いた元々の基本設計。
 
 ## はじめに (Getting Started)
 
@@ -60,12 +90,21 @@ Creative Commons Attribution 4.0 International (CC BY 4.0)
 ソースコードのライセンス: 
  [MIT License](https://www.google.com/search?q=LICENSE)
 
+## どのようにAIを利用したかの透明性 (Transparency in how AI is used)
+
+AIの手を借りずに、私が執筆してた基本設計書の内のおよそ1/5である「origin / 1-new-number-composition-Japanese.txt」というファイルを元に、ChatGPT 5 Proが全ての文章を書き直し、詳細や証明を強固にしてくれています。
+ja_01〜07までの完全なプロンプトを以下に公開します。
+https://chatgpt.com/share/68bbd10b-00fc-800d-b188-3cc504c23f06
+これによりChatGPTがいかに素晴らしい貢献をしてくれているかが明確になります。
+なお、基本設計書も日々更新しているので、必要に応じて公開します。
+
+λ計算インタプリタ「src / lambda_interpreter_v6_M-CR.html」は、元々は要件定義を私が書き、ChatGPT o1 Proが骨格となるコードを書き、Gemini 2.5 Pro が数々のバージョンアップと調整とデザインを整え、ChatGPT 5 Proが更にバージョンアップと調整を行いました。
+
+また、公開には至りませんが、インタプリンタに入力するための定義・証明のコードをClaudeが大量に作成しています。
+
 ## 謝辞 (Acknowledgments)
 
 この研究と執筆のプロセスは、ChatGPT, Gemini, Claude をはじめとする大規模言語モデルとの緊密な協力のもとで進められています。
-
-
-
 
 ## 追加の紹介 (Additional Introductions)
 
